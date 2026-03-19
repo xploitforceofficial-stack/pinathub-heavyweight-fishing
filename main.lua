@@ -945,31 +945,6 @@ DiscordSection:Button({
 })
 
 -- =======================================================
--- WINDOW CONTROLS
--- =======================================================
-local ControlSection = Window:Section({ Title = "Window Controls" })
-local ControlGroup = ControlSection:Group({})
-
-ControlGroup:Button({
-    Title = "Minimize",
-    Callback = function() 
-        Window:Minimize()
-    end
-})
-
-ControlGroup:Space()
-
-ControlGroup:Button({
-    Title = "Close",
-    Callback = function()
-        Window:Destroy()
-        if pingGui then pingGui:Destroy() end
-        if logoGui then logoGui:Destroy() end
-        if notifHolder then notifHolder:Destroy() end
-    end
-})
-
--- =======================================================
 -- INITIAL NOTIFICATION
 -- =======================================================
 task.wait(1)
