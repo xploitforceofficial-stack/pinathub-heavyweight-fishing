@@ -283,7 +283,7 @@ end
 -- =======================================================
 local Window = WindUI:CreateWindow({
     Title = "PinatHub",
-    Author = "ZeOrbit",
+    Author = "@viunze on tiktok",
     Folder = "PinatHub",
     NewElements = true,
     OpenButton = {
