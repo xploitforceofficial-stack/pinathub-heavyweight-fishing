@@ -1,5 +1,5 @@
 -- =======================================================
--- PINATHUB - FISHING SIMULATOR SCRIPT
+-- PINATHUB - FISHING SIMULATOR SCRIPT (FIXED)
 -- =======================================================
 
 -- Services
@@ -19,8 +19,21 @@ local UIS = UserInputService
 local lp = player
 local RS = ReplicatedStorage
 
--- Wait for MainGui
-local MainGui = lp:WaitForChild("PlayerGui"):WaitForChild("MainGui")
+-- Wait for MainGui dengan timeout
+local MainGui = nil
+local success, result = pcall(function()
+    return lp:WaitForChild("PlayerGui"):WaitForChild("MainGui", 10) -- Timeout 10 detik
+end)
+
+if success and result then
+    MainGui = result
+else
+    warn("MainGui not found within timeout")
+    -- Fallback: coba cari lagi nanti
+    task.spawn(function()
+        MainGui = lp:WaitForChild("PlayerGui"):WaitForChild("MainGui")
+    end)
+end
 
 -- Environment Variables
 getgenv().NWKZ_Anchor = false
@@ -192,7 +205,7 @@ local function ShowNotification(title, message, duration)
         if notif and notif.Parent then
             fadeOut:Play()
             task.wait(0.3)
-            notif:Destroy()
+            pcall(function() notif:Destroy() end)
         end
     end)
     
@@ -265,7 +278,7 @@ UIS.InputChanged:Connect(function(input)
     end
 end)
 
--- Load WindUI Library
+-- Load WindUI Library dengan error handling
 local WindUI = (function()
     local success, result = pcall(function()
         return loadstring(game:HttpGet("https://raw.githubusercontent.com/Footagesus/WindUI/main/dist/main.lua", true))()
@@ -299,11 +312,13 @@ local guiVisible = true
 logoButton.MouseButton1Click:Connect(function()
     guiVisible = not guiVisible
     if Window then
-        if guiVisible then
-            Window:Open()
-        else
-            Window:Minimize()
-        end
+        pcall(function()
+            if guiVisible then
+                Window:Open()
+            else
+                Window:Minimize()
+            end
+        end)
     end
 end)
 
@@ -340,8 +355,8 @@ pingLabel.TextScaled = true
 pingLabel.Font = Enum.Font.GothamBold
 pingLabel.Parent = pingFrame
 
--- Update Ping
-spawn(function()
+-- Update Ping dengan error handling
+task.spawn(function()
     while task.wait(1) do
         pcall(function()
             local pingValue = Stats.Network.ServerStatsItem["Data Ping"]:GetValueString()
@@ -368,29 +383,50 @@ local PlayerTab = Window:Tab({ Title = "Local Players", Icon = "users", IconColo
 local CommunityTab = Window:Tab({ Title = "Community", Icon = "message-circle", IconColor = Color3.fromHex("#9B59B6"), Border = true })
 
 -- =======================================================
--- AUTO FISHING LOGIC
+-- AUTO FISHING LOGIC (FIXED - Dengan error handling)
 -- =======================================================
 task.spawn(function()
     while task.wait(1) do
         if getgenv().NWKZ_AutoCast then
             pcall(function()
                 local char = lp.Character
-                if char and not char:GetAttribute("Fishing") and not MainGui.Fishing.Visible then
-                    RS.Events.Fishing:FireServer()
+                if char and not char:GetAttribute("Fishing") then
+                    -- Cek MainGui dan Fishing dulu
+                    if MainGui then
+                        local fishingUI = MainGui:FindFirstChild("Fishing")
+                        if fishingUI and not fishingUI.Visible then
+                            RS.Events.Fishing:FireServer()
+                        end
+                    end
                 end
             end)
         end
     end
 end)
 
-RunService.RenderStepped:Connect(function()
+-- RenderStepped dengan error handling yang lebih baik
+local renderSteppedConnection
+renderSteppedConnection = RunService.RenderStepped:Connect(function()
     if getgenv().NWKZ_Anchor then
         pcall(function()
-            local fishingUI = MainGui.Fishing
-            if fishingUI.Visible then
-                local bar = fishingUI.BarFrame.Bar
-                bar.Position = UDim2.new(0.5, 0, bar.Position.Y.Scale, 0)
-                RS.Fishing:FireServer("1")
+            -- Cek MainGui dulu
+            if MainGui then
+                local fishingUI = MainGui:FindFirstChild("Fishing")
+                if fishingUI and fishingUI.Visible then
+                    local barFrame = fishingUI:FindFirstChild("BarFrame")
+                    if barFrame then
+                        local bar = barFrame:FindFirstChild("Bar")
+                        if bar then
+                            bar.Position = UDim2.new(0.5, 0, bar.Position.Y.Scale, 0)
+                            
+                            -- Cek RS.Events dulu
+                            local events = RS:FindFirstChild("Events")
+                            if events and events:FindFirstChild("Fishing") then
+                                RS.Fishing:FireServer("1")
+                            end
+                        end
+                    end
+                end
             end
         end)
     end
@@ -431,8 +467,15 @@ InventorySection:Button({
     Title = "Sell All Fish",
     Desc = "Sell all fish in inventory",
     Callback = function()
-        RS.Events.SellFish:FireServer("All")
-        ShowNotification("Success", "Successfully sold all fish!", 3)
+        pcall(function()
+            local events = RS:FindFirstChild("Events")
+            if events and events:FindFirstChild("SellFish") then
+                events.SellFish:FireServer("All")
+                ShowNotification("Success", "Successfully sold all fish!", 3)
+            else
+                ShowNotification("Error", "SellFish event not found!", 2)
+            end
+        end)
     end
 })
 
@@ -441,7 +484,7 @@ InventorySection:Button({
 -- =======================================================
 local IslandsSection = TeleportTab:Section({ Title = "Islands Teleport" })
 
--- Teleport function
+-- Teleport function dengan error handling
 local function TeleportToLocation(locationName, findFunction)
     pcall(function()
         local character = player.Character
@@ -702,6 +745,7 @@ PlayerOptionsSection:Toggle({
         ShowNotification("Walk On Water", value and "Enabled" or "Disabled", 2)
         
         if value then
+            getgenv().WaterParts = {}
             local ocean = Workspace:FindFirstChild("Ocean")
             if ocean then
                 for _, child in ipairs(ocean:GetChildren()) do
@@ -714,8 +758,9 @@ PlayerOptionsSection:Toggle({
     end
 })
 
--- Walk on water logic
-RunService.RenderStepped:Connect(function()
+-- Walk on water logic (FIXED)
+local waterConnection
+waterConnection = RunService.RenderStepped:Connect(function()
     if getgenv().WalkOnWater then
         pcall(function()
             local character = player.Character
@@ -738,7 +783,7 @@ end)
 
 PlayerOptionsSection:Space()
 
--- Infinite Jump
+-- Infinite Jump (FIXED)
 PlayerOptionsSection:Toggle({
     Title = "Infinite Jump",
     Desc = "Jump infinitely",
@@ -751,16 +796,18 @@ PlayerOptionsSection:Toggle({
 
 UserInputService.JumpRequest:Connect(function()
     if getgenv().InfJump then
-        local character = player.Character
-        if character and character:FindFirstChild("Humanoid") then
-            character.Humanoid:ChangeState("Jumping")
-        end
+        pcall(function()
+            local character = player.Character
+            if character and character:FindFirstChild("Humanoid") then
+                character.Humanoid:ChangeState("Jumping")
+            end
+        end)
     end
 end)
 
 PlayerOptionsSection:Space()
 
--- Noclip
+-- Noclip (FIXED)
 PlayerOptionsSection:Toggle({
     Title = "Noclip",
     Desc = "Walk through walls",
@@ -771,7 +818,8 @@ PlayerOptionsSection:Toggle({
     end
 })
 
-RunService.Stepped:Connect(function()
+local steppedConnection
+steppedConnection = RunService.Stepped:Connect(function()
     if getgenv().Noclip then
         pcall(function()
             local character = player.Character
@@ -788,7 +836,7 @@ end)
 
 PlayerOptionsSection:Space()
 
--- RGB Body (SUPER SMOOTH & CEPAT - RGB MEWAH)
+-- RGB Body (FIXED - Dengan error handling lebih baik)
 PlayerOptionsSection:Toggle({
     Title = "RGB Body",
     Desc = "Rainbow RGB in your ava",
@@ -798,38 +846,38 @@ PlayerOptionsSection:Toggle({
         ShowNotification("RGB Body", value and "Enabled" or "Disabled", 2)
         
         if value then
-            -- Kumpulkan SEMUA bagian
-            getgenv().AllCharacterParts = {}
-            local character = player.Character
-            if character then
-                for _, part in ipairs(character:GetDescendants()) do
-                    if part:IsA("BasePart") or part:IsA("MeshPart") or part:IsA("PartOperation") then
-                        table.insert(getgenv().AllCharacterParts, part)
+            -- Kumpulkan SEMUA bagian dengan pcall
+            pcall(function()
+                getgenv().AllCharacterParts = {}
+                local character = player.Character
+                if character then
+                    for _, part in ipairs(character:GetDescendants()) do
+                        if part:IsA("BasePart") or part:IsA("MeshPart") or part:IsA("PartOperation") then
+                            table.insert(getgenv().AllCharacterParts, part)
+                        end
                     end
-                end
-                
-                for _, accessory in ipairs(character:GetChildren()) do
-                    if accessory:IsA("Accessory") then
-                        local handle = accessory:FindFirstChild("Handle")
-                        if handle and handle:IsA("BasePart") and not table.find(getgenv().AllCharacterParts, handle) then
-                            table.insert(getgenv().AllCharacterParts, handle)
+                    
+                    for _, accessory in ipairs(character:GetChildren()) do
+                        if accessory:IsA("Accessory") then
+                            local handle = accessory:FindFirstChild("Handle")
+                            if handle and handle:IsA("BasePart") and not table.find(getgenv().AllCharacterParts, handle) then
+                                table.insert(getgenv().AllCharacterParts, handle)
+                            end
                         end
                     end
                 end
-            end
+            end)
         end
     end
 })
 
--- RGB Body logic (SUPER SMOOTH & CEPAT)
-spawn(function()
+-- RGB Body logic (FIXED - Dengan error handling)
+task.spawn(function()
     local hue = 0
-    local connection
-    
     while true do
-        task.wait(0.016) -- 60fps update untuk smoothness maksimal
+        task.wait(0.016) -- 60fps update
         if getgenv().RGBBody then
-            hue = (hue + 1.2) % 360 -- Lebih cepat tapi tetap smooth (1.2 derajat per frame)
+            hue = (hue + 1.2) % 360
             local color = Color3.fromHSV(hue/360, 1, 1)
             
             pcall(function()
@@ -838,7 +886,6 @@ spawn(function()
                         part.Color = color
                         part.BrickColor = BrickColor.new(color)
                         
-                        -- Update semua texture/decal
                         for _, child in ipairs(part:GetChildren()) do
                             if child:IsA("Texture") or child:IsA("Decal") then
                                 child.Color3 = color
@@ -847,7 +894,6 @@ spawn(function()
                     end
                 end
                 
-                -- Update shirt/pants
                 local character = player.Character
                 if character then
                     for _, child in ipairs(character:GetChildren()) do
@@ -861,45 +907,35 @@ spawn(function()
     end
 end)
 
--- Character added event
+-- Character added event (FIXED)
 player.CharacterAdded:Connect(function(character)
+    -- Tunggu sebentar sampai character siap
     task.wait(1)
     
+    -- Update RGB Body jika aktif
     if getgenv().RGBBody then
-        getgenv().AllCharacterParts = {}
-        for _, part in ipairs(character:GetDescendants()) do
-            if part:IsA("BasePart") or part:IsA("MeshPart") or part:IsA("PartOperation") then
-                table.insert(getgenv().AllCharacterParts, part)
-            end
-        end
-        
-        for _, accessory in ipairs(character:GetChildren()) do
-            if accessory:IsA("Accessory") then
-                local handle = accessory:FindFirstChild("Handle")
-                if handle and handle:IsA("BasePart") and not table.find(getgenv().AllCharacterParts, handle) then
-                    table.insert(getgenv().AllCharacterParts, handle)
+        pcall(function()
+            getgenv().AllCharacterParts = {}
+            for _, part in ipairs(character:GetDescendants()) do
+                if part:IsA("BasePart") or part:IsA("MeshPart") or part:IsA("PartOperation") then
+                    table.insert(getgenv().AllCharacterParts, part)
                 end
             end
-        end
+            
+            for _, accessory in ipairs(character:GetChildren()) do
+                if accessory:IsA("Accessory") then
+                    local handle = accessory:FindFirstChild("Handle")
+                    if handle and handle:IsA("BasePart") and not table.find(getgenv().AllCharacterParts, handle) then
+                        table.insert(getgenv().AllCharacterParts, handle)
+                    end
+                end
+            end
+        end)
     end
     
+    -- Update Water Parts jika WalkOnWater aktif
     if getgenv().WalkOnWater then
-        getgenv().WaterParts = {}
-        local ocean = Workspace:FindFirstChild("Ocean")
-        if ocean then
-            for _, child in ipairs(ocean:GetChildren()) do
-                if child:IsA("Part") and child.Name == "Water" then
-                    table.insert(getgenv().WaterParts, child)
-                end
-            end
-        end
-    end
-end)
-
--- Water parts update
-spawn(function()
-    while task.wait(5) do
-        if getgenv().WalkOnWater then
+        pcall(function()
             getgenv().WaterParts = {}
             local ocean = Workspace:FindFirstChild("Ocean")
             if ocean then
@@ -909,6 +945,25 @@ spawn(function()
                     end
                 end
             end
+        end)
+    end
+end)
+
+-- Water parts update (FIXED)
+task.spawn(function()
+    while task.wait(5) do
+        if getgenv().WalkOnWater then
+            pcall(function()
+                getgenv().WaterParts = {}
+                local ocean = Workspace:FindFirstChild("Ocean")
+                if ocean then
+                    for _, child in ipairs(ocean:GetChildren()) do
+                        if child:IsA("Part") and child.Name == "Water" then
+                            table.insert(getgenv().WaterParts, child)
+                        end
+                    end
+                end
+            end)
         end
     end
 end)
@@ -925,6 +980,8 @@ WhatsAppSection:Button({
         if setclipboard then
             setclipboard("https://chat.whatsapp.com/I8hG44FLgrRAwQcS3lvEft")
             ShowNotification("Success", "WhatsApp link copied to clipboard!", 3)
+        else
+            ShowNotification("Error", "Clipboard not supported!", 2)
         end
     end
 })
@@ -940,9 +997,34 @@ DiscordSection:Button({
         if setclipboard then
             setclipboard("https://discord.gg/eDbaHKEf7G")
             ShowNotification("Success", "Discord link copied to clipboard!", 3)
+        else
+            ShowNotification("Error", "Clipboard not supported!", 2)
         end
     end
 })
+
+-- =======================================================
+-- CLEANUP FUNCTION (Opsional - untuk mencegah memory leak)
+-- =======================================================
+local function Cleanup()
+    if renderSteppedConnection then
+        renderSteppedConnection:Disconnect()
+    end
+    if waterConnection then
+        waterConnection:Disconnect()
+    end
+    if steppedConnection then
+        steppedConnection:Disconnect()
+    end
+end
+
+-- Optional: Panggil cleanup saat script di-stop
+-- (Tambahkan ini jika executor kalian support)
+-- game:GetService("CoreGui").ChildRemoved:Connect(function(child)
+--     if child.Name == "PinatHub" then
+--         Cleanup()
+--     end
+-- end)
 
 -- =======================================================
 -- INITIAL NOTIFICATION
