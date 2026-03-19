@@ -790,12 +790,12 @@ PlayerOptionsSection:Space()
 
 -- RGB Body (SUPER SMOOTH & CEPAT - RGB MEWAH)
 PlayerOptionsSection:Toggle({
-    Title = "RGB Mewah",
-    Desc = "Smooth & fast rainbow for entire body",
+    Title = "RGB Body",
+    Desc = "Rainbow RGB in your ava",
     Value = false,
     Callback = function(value)
         getgenv().RGBBody = value
-        ShowNotification("RGB Mewah", value and "Enabled - Smooth & Fast" or "Disabled", 2)
+        ShowNotification("RGB Body", value and "Enabled" or "Disabled", 2)
         
         if value then
             -- Kumpulkan SEMUA bagian
